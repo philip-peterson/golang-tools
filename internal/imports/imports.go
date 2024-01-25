@@ -17,6 +17,7 @@ import (
 	"go/printer"
 	"go/token"
 	"io"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -45,18 +46,25 @@ type Options struct {
 }
 
 // Process implements golang.org/x/tools/imports.Process with explicit context in opt.Env.
-func Process(filename string, src []byte, opt *Options) (formatted []byte, err error) {
-	fileSet := token.NewFileSet()
-	file, adjust, err := parse(fileSet, filename, src, opt)
+func Process(s *Session, filename string, src []byte, opt *Options) (formatted []byte, err error) {
+	var fileSet *token.FileSet
+	if s != nil {
+		fileSet = s.Fset
+	} else {
+		fileSet = token.NewFileSet()
+	}
+
+	file, adjust, err := parse(s, fileSet, filename, src, opt)
 	if err != nil {
 		return nil, err
 	}
 
 	if !opt.FormatOnly {
-		if err := fixImports(fileSet, file, filename, opt.Env); err != nil {
+		if err := fixImports(s, fileSet, file, filename, opt.Env); err != nil {
 			return nil, err
 		}
 	}
+
 	return formatFile(fileSet, file, src, adjust, opt)
 }
 
@@ -66,17 +74,22 @@ func Process(filename string, src []byte, opt *Options) (formatted []byte, err e
 //
 // Note that filename's directory influences which imports can be chosen,
 // so it is important that filename be accurate.
-func FixImports(ctx context.Context, filename string, src []byte, opt *Options) (fixes []*ImportFix, err error) {
+func FixImports(s *Session, ctx context.Context, filename string, src []byte, opt *Options) (fixes []*ImportFix, err error) {
 	ctx, done := event.Start(ctx, "imports.FixImports")
 	defer done()
 
-	fileSet := token.NewFileSet()
-	file, _, err := parse(fileSet, filename, src, opt)
+	var fileSet *token.FileSet
+	if s != nil {
+		fileSet = s.Fset
+	} else {
+		fileSet = token.NewFileSet()
+	}
+
+	file, _, err := parse(s, fileSet, filename, src, opt)
 	if err != nil {
 		return nil, err
 	}
-
-	return getFixes(ctx, fileSet, file, filename, opt.Env)
+	return getFixes(s, ctx, fileSet, file, filename, opt.Env)
 }
 
 // ApplyFixes applies all of the fixes to the file and formats it. extraMode
@@ -164,7 +177,11 @@ func formatFile(fset *token.FileSet, file *ast.File, src []byte, adjust func(ori
 
 // parse parses src, which was read from filename,
 // as a Go source file or statement list.
-func parse(fset *token.FileSet, filename string, src []byte, opt *Options) (*ast.File, func(orig, src []byte) []byte, error) {
+func parse(s *Session, fset *token.FileSet, filename string, src []byte, opt *Options) (*ast.File, func(orig, src []byte) []byte, error) {
+	if s != nil && s.Fset != fset {
+		return nil, nil, fmt.Errorf("session provided does not match fset")
+	}
+
 	parserMode := parser.Mode(0)
 	if opt.Comments {
 		parserMode |= parser.ParseComments
@@ -173,8 +190,22 @@ func parse(fset *token.FileSet, filename string, src []byte, opt *Options) (*ast
 		parserMode |= parser.AllErrors
 	}
 
+	var file *ast.File
+	var err error
+
 	// Try as whole source file.
-	file, err := parser.ParseFile(fset, filename, src, parserMode)
+	if s != nil {
+		// While ParseFile accepts nil for src, MemoizedParseFile does not, so
+		// we must read the file here to satisfy.
+		var readSrc []byte
+		readSrc, err = os.ReadFile(filename)
+		if err == nil {
+			file, err = s.MemoizedParseFile(filename, readSrc, parserMode)
+		}
+	} else {
+		file, err = parser.ParseFile(fset, filename, src, parserMode)
+	}
+
 	if err == nil {
 		return file, nil, nil
 	}
@@ -191,7 +222,11 @@ func parse(fset *token.FileSet, filename string, src []byte, opt *Options) (*ast
 	// the correct line.
 	const prefix = "package main;"
 	psrc := append([]byte(prefix), src...)
-	file, err = parser.ParseFile(fset, filename, psrc, parserMode)
+	if s != nil {
+		file, err = s.MemoizedParseFile(filename, psrc, parserMode)
+	} else {
+		file, err = parser.ParseFile(fset, filename, psrc, parserMode)
+	}
 	if err == nil {
 		// Gofmt will turn the ; into a \n.
 		// Do that ourselves now and update the file contents,
@@ -225,7 +260,11 @@ func parse(fset *token.FileSet, filename string, src []byte, opt *Options) (*ast
 	// Insert using a ;, not a newline, so that the line numbers
 	// in fsrc match the ones in src.
 	fsrc := append(append([]byte("package p; func _() {"), src...), '}')
-	file, err = parser.ParseFile(fset, filename, fsrc, parserMode)
+	if s != nil {
+		file, err = s.MemoizedParseFile(filename, fsrc, parserMode)
+	} else {
+		file, err = parser.ParseFile(fset, filename, fsrc, parserMode)
+	}
 	if err == nil {
 		adjust := func(orig, src []byte) []byte {
 			// Remove the wrapping.

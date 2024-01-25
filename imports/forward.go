@@ -14,6 +14,12 @@ import (
 	intimp "golang.org/x/tools/internal/imports"
 )
 
+type Session *intimp.Session
+
+func NewSession(cacheSize uint) Session {
+	return intimp.NewSession(cacheSize)
+}
+
 // Options specifies options for processing files.
 type Options struct {
 	Fragment  bool // Accept fragment of a source file (no package statement)
@@ -41,7 +47,7 @@ var LocalPrefix string
 // Note that filename's directory influences which imports can be chosen,
 // so it is important that filename be accurate.
 // To process data “as if” it were in filename, pass the data as a non-nil src.
-func Process(filename string, src []byte, opt *Options) ([]byte, error) {
+func Process(s Session, filename string, src []byte, opt *Options) ([]byte, error) {
 	var err error
 	if src == nil {
 		src, err = os.ReadFile(filename)
@@ -67,7 +73,7 @@ func Process(filename string, src []byte, opt *Options) ([]byte, error) {
 	if Debug {
 		intopt.Env.Logf = log.Printf
 	}
-	return intimp.Process(filename, src, intopt)
+	return intimp.Process(s, filename, src, intopt)
 }
 
 // VendorlessPath returns the devendorized version of the import path ipath.

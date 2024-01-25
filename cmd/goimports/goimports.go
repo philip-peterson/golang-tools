@@ -138,7 +138,7 @@ func processFile(filename string, in io.Reader, out io.Writer, argType argumentT
 		}
 	}
 
-	res, err := imports.Process(target, src, opt)
+	res, err := imports.Process(nil, target, src, opt)
 	if err != nil {
 		return err
 	}

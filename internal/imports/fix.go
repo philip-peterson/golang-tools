@@ -104,7 +104,7 @@ type packageInfo struct {
 
 // parseOtherFiles parses all the Go files in srcDir except filename, including
 // test files if filename looks like a test.
-func parseOtherFiles(fset *token.FileSet, srcDir, filename string) []*ast.File {
+func parseOtherFiles(s *Session, srcDir string, filename string) []*ast.File {
 	// This could use go/packages but it doesn't buy much, and it fails
 	// with https://golang.org/issue/26296 in LoadFiles mode in some cases.
 	considerTests := strings.HasSuffix(filename, "_test.go")
@@ -124,7 +124,7 @@ func parseOtherFiles(fset *token.FileSet, srcDir, filename string) []*ast.File {
 			continue
 		}
 
-		f, err := parser.ParseFile(fset, filepath.Join(srcDir, fi.Name()), nil, 0)
+		f, err := s.MemoizedParseFile(filepath.Join(srcDir, fi.Name()), nil, 0)
 		if err != nil {
 			continue
 		}
@@ -562,8 +562,8 @@ func (p *pass) addCandidate(imp *ImportInfo, pkg *packageInfo) {
 // easily be extended by adding a file with an init function.
 var fixImports = fixImportsDefault
 
-func fixImportsDefault(fset *token.FileSet, f *ast.File, filename string, env *ProcessEnv) error {
-	fixes, err := getFixes(context.Background(), fset, f, filename, env)
+func fixImportsDefault(s *Session, fset *token.FileSet, f *ast.File, filename string, env *ProcessEnv) error {
+	fixes, err := getFixes(s, context.Background(), fset, f, filename, env)
 	if err != nil {
 		return err
 	}
@@ -573,7 +573,7 @@ func fixImportsDefault(fset *token.FileSet, f *ast.File, filename string, env *P
 
 // getFixes gets the import fixes that need to be made to f in order to fix the imports.
 // It does not modify the ast.
-func getFixes(ctx context.Context, fset *token.FileSet, f *ast.File, filename string, env *ProcessEnv) ([]*ImportFix, error) {
+func getFixes(s *Session, ctx context.Context, fset *token.FileSet, f *ast.File, filename string, env *ProcessEnv) ([]*ImportFix, error) {
 	abs, err := filepath.Abs(filename)
 	if err != nil {
 		return nil, err
@@ -592,7 +592,7 @@ func getFixes(ctx context.Context, fset *token.FileSet, f *ast.File, filename st
 		return fixes, nil
 	}
 
-	otherFiles := parseOtherFiles(fset, srcDir, filename)
+	otherFiles := parseOtherFiles(s, srcDir, filename)
 
 	// Second pass: add information from other files in the same package,
 	// like their package vars and imports.

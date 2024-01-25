@@ -35,8 +35,11 @@ type entry struct {
 // The cache capacity uses arbitrary units, which are specified during the Set
 // operation.
 func New(capacity int) *Cache {
-	if capacity == 0 {
-		panic("zero capacity")
+	if capacity <= 0 {
+		if capacity == 0 {
+			panic("zero capacity")
+		}
+		panic("negative capacity")
 	}
 
 	return &Cache{

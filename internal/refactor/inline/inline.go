@@ -290,7 +290,7 @@ func Inline(logf func(string, ...any), caller *Caller, callee *Callee) ([]byte, 
 
 	// Recompute imports only if there were existing ones.
 	if len(f.Imports) > 0 {
-		formatted, err := imports.Process("output", newSrc, nil)
+		formatted, err := imports.Process(nil, "output", newSrc, nil)
 		if err != nil {
 			logf("cannot reformat: %v <<%s>>", err, &out)
 			return nil, err // cannot reformat (a bug?)
