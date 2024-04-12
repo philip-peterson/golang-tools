@@ -29,7 +29,8 @@ type Options struct {
 	TabIndent bool // Use tabs for indent (true if nil *Options provided)
 	TabWidth  int  // Tab width (8 if nil *Options provided)
 
-	FormatOnly bool // Disable the insertion and deletion of imports
+	FormatOnly bool     // Disable the insertion and deletion of imports
+	Session    *Session // Allow caching of file parse operations across repeated invocations
 }
 
 // Debug controls verbose logging.
@@ -47,7 +48,11 @@ var LocalPrefix string
 // Note that filename's directory influences which imports can be chosen,
 // so it is important that filename be accurate.
 // To process data “as if” it were in filename, pass the data as a non-nil src.
-func Process(s Session, filename string, src []byte, opt *Options) ([]byte, error) {
+func Process(filename string, src []byte, opt *Options) ([]byte, error) {
+	var s *Session
+	if opt != nil {
+		s = opt.Session
+	}
 	var err error
 	if src == nil {
 		src, err = os.ReadFile(filename)
@@ -73,7 +78,7 @@ func Process(s Session, filename string, src []byte, opt *Options) ([]byte, erro
 	if Debug {
 		intopt.Env.Logf = log.Printf
 	}
-	return intimp.Process(s, filename, src, intopt)
+	return intimp.Process(filename, src, intopt)
 }
 
 // VendorlessPath returns the devendorized version of the import path ipath.

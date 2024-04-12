@@ -1760,8 +1760,7 @@ func (t *goimportTest) processNonModule(file string, contents []byte, opts *Opti
 	}
 	// ProcessEnv is not safe for concurrent use. Make a copy.
 	opts.Env = t.env.CopyConfig()
-	s := NewSession(10)
-	return Process(s, file, contents, opts)
+	return Process(file, contents, opts)
 }
 
 func (t *goimportTest) assertProcessEquals(module, file string, contents []byte, opts *Options, want string) {

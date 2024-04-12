@@ -141,7 +141,7 @@ func Generate() ([]byte, error) {
 		FormatOnly: true,
 		Comments:   true,
 	}
-	content, err := imports.Process("", buf.Bytes(), opts)
+	content, err := imports.Process(nil, "", buf.Bytes(), opts)
 	if err != nil {
 		return nil, fmt.Errorf("goimports: %v", err)
 	}
